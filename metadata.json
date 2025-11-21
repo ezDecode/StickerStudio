@@ -1,0 +1,8 @@
+{
+  "name": "SkieVision",
+  "description": "Turn any object into a sticker. Instantly. Crystal clear PNGs with AI.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
