@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { generateSticker, processImage, detectSubject, editSticker, enhancePromptForComedy, convertToWhatsAppFormat, STICKER_STYLES, StickerStyleKey, ERROR_API_KEY_REQUIRED, ERROR_API_KEY_INVALID } from '../services/geminiService';
-import { saveAutosave, getAutosave, clearAutosave, getFreeImageCount, getUserApiKey } from '../services/storage';
+import { saveAutosave, getAutosave, clearAutosave, getUserApiKey } from '../services/storage';
 import Button from '../components/Button';
 import ImageUpload from '../components/ImageUpload';
 import ApiKeyModal from '../components/ApiKeyModal';
@@ -32,33 +32,30 @@ const StickerMaker: React.FC<StickerMakerProps> = ({ onStickerCreated, initialSt
   const [isEditing, setIsEditing] = useState(false);
   const [editPrompt, setEditPrompt] = useState('');
 
-  // --- NEW: QUOTA & KEY STATE ---
-  const [quotaUsed, setQuotaUsed] = useState<number>(0);
+  // --- API KEY STATE ---
   const [hasUserKey, setHasUserKey] = useState(false);
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [keyModalReason, setKeyModalReason] = useState<'quota' | 'invalid' | 'missing'>('quota');
+  const [keyModalReason, setKeyModalReason] = useState<'invalid' | 'missing'>('missing');
 
-  const refreshQuota = async () => {
-    const count = await getFreeImageCount();
+  const refreshApiKey = async () => {
     const key = await getUserApiKey();
-    setQuotaUsed(count);
     setHasUserKey(!!key && key.trim().length > 0);
 
     if (key) {
       console.log("🔑 Active Key Source: USER_PROVIDED_KEY");
     } else {
-      console.log(`🔑 Active Key Source: SYSTEM_DEV_KEY (Usage: ${count}/5)`);
+      console.log("🔑 No API key configured");
     }
   };
 
   useEffect(() => {
-    refreshQuota();
+    refreshApiKey();
   }, [generatedSticker]); // Refresh whenever a sticker is generated
 
   // 1. Load initial sticker OR Autosave
   useEffect(() => {
     const loadSession = async () => {
-      await refreshQuota();
+      await refreshApiKey();
       if (initialSticker) {
         setGeneratedSticker(initialSticker.url);
         setPrompt(initialSticker.prompt || "Edited Sticker");
@@ -106,7 +103,7 @@ const StickerMaker: React.FC<StickerMakerProps> = ({ onStickerCreated, initialSt
   const handleError = (err: any) => {
     const msg = err.message || "";
     if (msg === ERROR_API_KEY_REQUIRED) {
-      setKeyModalReason(quotaUsed >= 5 ? 'quota' : 'missing');
+      setKeyModalReason('missing');
       setShowKeyModal(true);
       return true; // Handled
     }
@@ -311,7 +308,7 @@ const StickerMaker: React.FC<StickerMakerProps> = ({ onStickerCreated, initialSt
         isOpen={showKeyModal}
         onClose={() => {
           setShowKeyModal(false);
-          refreshQuota();
+          refreshApiKey();
         }}
         reason={keyModalReason}
       />
@@ -356,19 +353,19 @@ const StickerMaker: React.FC<StickerMakerProps> = ({ onStickerCreated, initialSt
             <div className="flex items-center justify-between border-b border-white/5 pb-4">
               <span className="text-xs font-mono text-zinc-400 tracking-widest uppercase">Input Source</span>
 
-              {/* Quota Badge */}
+              {/* API Key Status Badge */}
               <button
                 onClick={() => setShowKeyModal(true)}
                 className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border transition-all ${hasUserKey
-                  ? 'bg-purple-500/10 text-purple-300 border-purple-500/30 hover:bg-purple-500/20'
-                  : (quotaUsed >= 5 ? 'bg-red-500/10 text-red-300 border-red-500/30' : 'bg-zinc-800 text-zinc-300 border-white/10 hover:bg-zinc-700')
+                    ? 'bg-purple-500/10 text-purple-300 border-purple-500/30 hover:bg-purple-500/20'
+                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
                   }`}
-                title={hasUserKey ? "Using your personal API Key" : "Using free system quota"}
+                title={hasUserKey ? "Using your personal API Key" : "Click to add API Key"}
               >
                 {hasUserKey ? (
-                  <><ShieldCheck size={10} /> BYOK Active</>
+                  <><ShieldCheck size={10} /> API Key Active</>
                 ) : (
-                  <>{quotaUsed}/5 Free Used</>
+                  <><AlertTriangle size={10} /> No API Key</>
                 )}
               </button>
 
