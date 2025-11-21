@@ -1,12 +1,90 @@
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
+import { getUserApiKey, getFreeImageCount, incrementFreeImageCount, clearUserApiKey, saveUserApiKey } from './storage';
 
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please check your environment configuration.");
+// Error constant for UI to detect
+export const ERROR_API_KEY_REQUIRED = "API_KEY_REQUIRED";
+export const ERROR_API_KEY_INVALID = "API_KEY_INVALID";
+
+/**
+ * VALIDATES a user-provided API Key by making a lightweight call.
+ */
+export const validateUserKey = async (apiKey: string): Promise<boolean> => {
+  try {
+    const client = new GoogleGenAI({ apiKey });
+    // Minimal token count request to verify auth
+    await client.models.countTokens({
+      model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: 'ping' }] }]
+    });
+    return true;
+  } catch (e) {
+    console.error("Key Validation Failed:", e);
+    return false;
   }
-  return new GoogleGenAI({ apiKey });
 };
+
+/**
+ * CORE API EXECUTOR
+ * Handles: Key Selection (User vs Dev), Quota Checking, Error Handling
+ */
+async function callGemini<T>(
+  operation: (ai: GoogleGenAI) => Promise<T>,
+  consumeQuota: boolean = false
+): Promise<T> {
+  // 1. Check for User Key first
+  const userKey = await getUserApiKey();
+  let ai: GoogleGenAI;
+  let usingDevKey = false;
+
+  if (userKey) {
+    ai = new GoogleGenAI({ apiKey: userKey });
+  } else {
+    // 2. Fallback to Developer Key if Quota allows
+    const count = await getFreeImageCount();
+    // Support both variable names for safety, prioritizing the one from .env
+    const devKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
+
+    if (!devKey) {
+      console.error("Dev Key missing in environment");
+      // Config error or intentional missing key -> Force User Key
+      throw new Error(ERROR_API_KEY_REQUIRED);
+    }
+
+    if (count >= 5) {
+      // Quota exceeded -> Force User Key
+      throw new Error(ERROR_API_KEY_REQUIRED);
+    }
+
+    ai = new GoogleGenAI({ apiKey: devKey });
+    usingDevKey = true;
+  }
+
+  // 3. Execute Operation
+  try {
+    return await retryOperation(() => operation(ai));
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+
+    // Check for specific API Key errors (User or Dev key)
+    if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID') ||
+      (userKey && (msg.includes('403') || msg.includes('API key') || msg.includes('PERMISSION_DENIED')))) {
+
+      if (userKey) {
+        await clearUserApiKey();
+        throw new Error(ERROR_API_KEY_INVALID);
+      }
+
+      // If Dev Key failed, we now REQUIRE a user key
+      throw new Error(ERROR_API_KEY_REQUIRED);
+    }
+    throw error;
+  } finally {
+    // 4. Increment Quota only if using Dev Key AND operation was "consumable" (successful image gen)
+    if (usingDevKey && consumeQuota) {
+      await incrementFreeImageCount();
+    }
+  }
+}
 
 // Helper to retry operations (handling flaky RPC/Network errors)
 const retryOperation = async <T>(operation: () => Promise<T>, retries = 2, delay = 1000): Promise<T> => {
@@ -15,12 +93,12 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 2, delay
   } catch (error: any) {
     const msg = error?.message || JSON.stringify(error);
     // Don't retry on client errors
-    if (msg.includes("404") || msg.includes("not found") || msg.includes("Requested entity was not found") || msg.includes("403") || msg.includes("400")) {
+    if (msg.includes("404") || msg.includes("not found") || msg.includes("Requested entity was not found") || msg.includes("403") || msg.includes("400") || msg.includes("API key")) {
       throw error;
     }
 
     if (retries <= 0) throw error;
-    
+
     console.warn(`Operation failed, retrying... (${retries} attempts left)`, error);
     await new Promise(resolve => setTimeout(resolve, delay));
     return retryOperation(operation, retries - 1, delay * 2);
@@ -32,8 +110,8 @@ const retryOperation = async <T>(operation: () => Promise<T>, retries = 2, delay
 export type StickerStyleKey = 'ANIME';
 
 export const STICKER_STYLES: Record<StickerStyleKey, { label: string; prompt: string; description: string }> = {
-  ANIME: { 
-    label: "Anime", 
+  ANIME: {
+    label: "Anime",
     prompt: "90s Anime Style, Cel-shaded, Thick speed lines, Exaggerated facial expressions, Vibrant flat colors, Sticker Outline. Typography: BOLD COMIC BOOK FONT / MANGA SFX.",
     description: "Expressive cel-shaded art with comic text"
   }
@@ -74,7 +152,7 @@ export const processImage = async (file: File): Promise<{ data: string; mimeType
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const MAX_DIMENSION = 1024; 
+      const MAX_DIMENSION = 1024;
       let width = img.width;
       let height = img.height;
 
@@ -96,15 +174,15 @@ export const processImage = async (file: File): Promise<{ data: string; mimeType
         reject(new Error("Canvas context missing"));
         return;
       }
-      
+
       // Fill white background first to handle transparent PNGs
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, 0, 0, width, height);
-      
+
       const mimeType = 'image/jpeg';
       const dataUrl = canvas.toDataURL(mimeType, 0.92); // Slightly lower quality for speed, visually identical
-      
+
       URL.revokeObjectURL(img.src);
 
       resolve({
@@ -122,9 +200,6 @@ export const processImage = async (file: File): Promise<{ data: string; mimeType
 
 /**
  * ADVANCED BACKGROUND REMOVAL V5 (Matting against Black)
- * - Uses Flood Fill to isolate connected background regions.
- * - Implements "Luma Key" edge matting to remove black halos from anti-aliased edges.
- * - Handles fine details like hair/fur by preserving luminance as opacity on the fringe.
  */
 const removeSmartBackground = (base64Image: string): Promise<string> => {
   return new Promise((resolve) => {
@@ -135,123 +210,89 @@ const removeSmartBackground = (base64Image: string): Promise<string> => {
       canvas.width = img.width;
       canvas.height = img.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      
+
       if (!ctx) {
         resolve(base64Image);
         return;
       }
-      
+
       ctx.drawImage(img, 0, 0);
-      
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       const width = canvas.width;
       const height = canvas.height;
       const totalPixels = width * height;
-      
-      // 1. FLOOD FILL: IDENTIFY DEFINITE BACKGROUND
-      // 0 = Foreground/Unknown, 1 = Background
-      const visited = new Uint8Array(totalPixels); 
-      const queue = new Int32Array(totalPixels);   
+
+      const visited = new Uint8Array(totalPixels);
+      const queue = new Int32Array(totalPixels);
       let head = 0;
       let tail = 0;
 
-      // Tolerance for "Black" detection.
-      // Generated images are usually pure black #000000, but compression adds noise.
-      const TOLERANCE = 20; 
+      const TOLERANCE = 20;
       const TOLERANCE_SQ = TOLERANCE * TOLERANCE;
 
-      // Check if pixel at index is "Black"
       const isBlack = (idx: number) => {
         const offset = idx * 4;
         const r = data[offset];
         const g = data[offset + 1];
         const b = data[offset + 2];
-        return (r*r + g*g + b*b) <= TOLERANCE_SQ;
+        return (r * r + g * g + b * b) <= TOLERANCE_SQ;
       };
 
       const push = (idx: number) => {
-         if (idx >= 0 && idx < totalPixels && !visited[idx] && isBlack(idx)) { 
-             visited[idx] = 1; 
-             queue[tail++] = idx; 
-         }
+        if (idx >= 0 && idx < totalPixels && !visited[idx] && isBlack(idx)) {
+          visited[idx] = 1;
+          queue[tail++] = idx;
+        }
       };
 
-      // Seed from corners
-      push(0); 
-      push(width - 1); 
-      push((height - 1) * width); 
+      push(0);
+      push(width - 1);
+      push((height - 1) * width);
       push(totalPixels - 1);
 
-      // If corners aren't black (rare), try edges
       if (tail === 0) {
-         for (let i=0; i<width; i+=10) { push(i); push(totalPixels-1-i); }
-         for (let i=0; i<height; i+=10) { push(i*width); push(i*width + width-1); }
+        for (let i = 0; i < width; i += 10) { push(i); push(totalPixels - 1 - i); }
+        for (let i = 0; i < height; i += 10) { push(i * width); push(i * width + width - 1); }
       }
 
-      // Run Flood Fill
       while (head < tail) {
         const idx = queue[head++];
         const x = idx % width;
-        
+
         if (x > 0) push(idx - 1);
         if (x < width - 1) push(idx + 1);
         if (idx >= width) push(idx - width);
         if (idx < totalPixels - width) push(idx + width);
       }
 
-      // 2. EDGE MATTING & ALPHA RECONSTRUCTION
-      // We iterate all pixels.
-      // If it's visited (Background) -> Transparent.
-      // If it's NOT visited, check neighbors.
-      // If a neighbor IS background, this is an EDGE pixel.
-      // For Edge pixels, we calculate Alpha based on Brightness (Max RGB).
-      // This converts the "fading to black" antialiasing into "fading to transparent".
-      
       for (let i = 0; i < totalPixels; i++) {
-          const offset = i * 4;
+        const offset = i * 4;
 
-          if (visited[i]) {
-              // Definite Background
-              data[offset + 3] = 0;
-          } else {
-              // Check 4-way neighbors to detect edge
-              let isEdge = false;
-              const x = i % width;
-              
-              // Optimization: Unroll check
-              if ((x > 0 && visited[i - 1]) || 
-                  (x < width - 1 && visited[i + 1]) || 
-                  (i >= width && visited[i - width]) || 
-                  (i < totalPixels - width && visited[i + width])) {
-                  isEdge = true;
-              }
+        if (visited[i]) {
+          data[offset + 3] = 0;
+        } else {
+          let isEdge = false;
+          const x = i % width;
 
-              if (isEdge) {
-                  // This is a boundary pixel. It might be a dark halo.
-                  // Calculate max channel value (Luminance approx for white border)
-                  const r = data[offset];
-                  const g = data[offset + 1];
-                  const b = data[offset + 2];
-                  
-                  // Robust matting formula for black backgrounds:
-                  // Alpha = max(r, g, b)
-                  // Example: Black(0,0,0) -> Alpha 0
-                  // Example: Gray(50,50,50) -> Alpha 50 (~20%)
-                  // Example: White(255,255,255) -> Alpha 255
-                  // Example: Red(255,0,0) -> Alpha 255
-                  
-                  // We boost it slightly to avoid overly soft edges on colored objects
-                  let alpha = Math.max(r, Math.max(g, b));
-                  
-                  // Optional: Gamma correction or Gain to make it sharper
-                  // alpha = Math.min(255, alpha * 1.2); 
-
-                  data[offset + 3] = alpha;
-              }
+          if ((x > 0 && visited[i - 1]) ||
+            (x < width - 1 && visited[i + 1]) ||
+            (i >= width && visited[i - width]) ||
+            (i < totalPixels - width && visited[i + width])) {
+            isEdge = true;
           }
+
+          if (isEdge) {
+            const r = data[offset];
+            const g = data[offset + 1];
+            const b = data[offset + 2];
+            let alpha = Math.max(r, Math.max(g, b));
+            data[offset + 3] = alpha;
+          }
+        }
       }
-      
+
       ctx.putImageData(imageData, 0, 0);
       resolve(canvas.toDataURL('image/png'));
     };
@@ -272,7 +313,6 @@ export interface EnhancedPromptResult {
  * Enhance prompt via Gemini Search - Tuned for COMEDY & UNEXPECTED SCENARIOS
  */
 export const enhancePromptForComedy = async (userPrompt: string): Promise<EnhancedPromptResult> => {
-  const ai = getAiClient();
   try {
     // The "Comedy Doctor" System
     const searchPrompt = `
@@ -289,18 +329,18 @@ export const enhancePromptForComedy = async (userPrompt: string): Promise<Enhanc
       Constraint: Keep it visual. Mention "Anime Sticker style".
     `;
 
-    const response = await retryOperation<GenerateContentResponse>(() => ai.models.generateContent({
+    // NOTE: We do NOT consume quota for prompt enhancement
+    const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: searchPrompt,
       config: {
         tools: [{ googleSearch: {} }],
-        temperature: 1.5, // High creativity
+        temperature: 1.5,
       },
-    }));
+    }), false);
 
     const text = response.text?.trim() || userPrompt;
-    
-    // Extract search sources if any (often used for pop culture references)
+
     const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     const sources = groundingChunks
       .filter((chunk: any) => chunk.web?.uri && chunk.web?.title)
@@ -324,27 +364,22 @@ export const enhancePromptWithContext = enhancePromptForComedy;
  * Generates a sticker using SkieVision logic.
  */
 export const generateSticker = async (
-  base64Image: string | null, 
+  base64Image: string | null,
   userPrompt: string = "",
   customCaption: string = "",
   mimeType: string = 'image/jpeg',
   styleKey: StickerStyleKey = 'ANIME'
 ): Promise<string> => {
-  const ai = getAiClient();
   let rawImageBase64 = "";
-  
+
   const bgInstruction = "Background MUST be PURE #000000 BLACK for removal. No gradients.";
-  
-  // Get style config or default
   const styleConfig = STICKER_STYLES[styleKey] || STICKER_STYLES.ANIME;
   const stylePrompt = styleConfig.prompt;
 
-  // Robust Caption Logic
   let captionPrompt = "";
   if (customCaption.trim()) {
     captionPrompt = `Include text integrated into the design: "${customCaption}". Font MUST be BOLD COMIC BOOK STYLE / MANGA SFX.`;
   } else {
-    // If no caption, sometimes ask for a sound effect text
     if (Math.random() > 0.7) {
       captionPrompt = `Include a comic sound effect text like "POW!", "LOL", or "NANI?!" styled in BOLD MANGA FONT.`;
     }
@@ -362,9 +397,10 @@ export const generateSticker = async (
     - ${bgInstruction}
     - ${captionPrompt}
     `;
-    
+
     try {
-      const response = await retryOperation<any>(() => ai.models.generateImages({
+      // NOTE: Consumes Quota
+      const response = await callGemini(ai => ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
         config: {
@@ -372,8 +408,8 @@ export const generateSticker = async (
           outputMimeType: 'image/jpeg',
           aspectRatio: '1:1',
         },
-      }));
-      
+      }), true);
+
       const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
       if (base64ImageBytes) {
         rawImageBase64 = `data:image/jpeg;base64,${base64ImageBytes}`;
@@ -384,11 +420,10 @@ export const generateSticker = async (
       console.error("Text-to-Sticker error:", error);
       throw error;
     }
-  } 
-  
+  }
+
   // --- Scenario 2: Image-to-Sticker (Gemini 2.5 Flash Image) ---
   else {
-    // Instruction to TRANSFORM the image
     let prompt = `TRANSFORM this image into a FUNNY ANIME STICKER.
     
     STEPS:
@@ -404,7 +439,8 @@ export const generateSticker = async (
     if (userPrompt) prompt += ` Context/Idea: ${userPrompt}.`;
 
     try {
-      const response = await retryOperation<GenerateContentResponse>(() => ai.models.generateContent({
+      // NOTE: Consumes Quota
+      const response = await callGemini(ai => ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
           parts: [
@@ -414,10 +450,10 @@ export const generateSticker = async (
         },
         config: {
           systemInstruction: SYSTEM_PROMPT,
-          temperature: 1.2, // Sweet spot for creativity vs adherence
+          temperature: 1.2,
           responseModalities: [Modality.IMAGE],
         },
-      }));
+      }), true);
 
       const part = response.candidates?.[0]?.content?.parts?.[0];
       if (part && part.inlineData) {
@@ -450,9 +486,8 @@ export const editSticker = async (
   currentStickerBase64: string,
   editInstruction: string
 ): Promise<string> => {
-  const ai = getAiClient();
   const cleanBase64 = currentStickerBase64.replace(/^data:image\/(png|jpeg|webp);base64,/, "");
-  
+
   const prompt = `Edit this sticker. 
   Request: "${editInstruction}".
   Keep it funny. Keep the Anime style. Ensure text is in COMIC FONT.
@@ -460,7 +495,8 @@ export const editSticker = async (
   `;
 
   try {
-    const response = await retryOperation<GenerateContentResponse>(() => ai.models.generateContent({
+    // NOTE: Consumes Quota
+    const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
@@ -472,7 +508,7 @@ export const editSticker = async (
         systemInstruction: SYSTEM_PROMPT,
         responseModalities: [Modality.IMAGE],
       },
-    }));
+    }), true);
 
     const part = response.candidates?.[0]?.content?.parts?.[0];
     if (part && part.inlineData) {
@@ -487,9 +523,9 @@ export const editSticker = async (
 };
 
 export const detectSubject = async (base64Image: string, mimeType: string = 'image/jpeg'): Promise<string> => {
-  const ai = getAiClient();
   try {
-    const response = await retryOperation<GenerateContentResponse>(() => ai.models.generateContent({
+    // NOTE: Detection is free (no quota consumed)
+    const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
         parts: [
@@ -497,7 +533,7 @@ export const detectSubject = async (base64Image: string, mimeType: string = 'ima
           { text: "Identify the main subject and suggest a ROAST caption. Make it mean but funny." },
         ],
       },
-    }));
+    }), false);
     return response.text?.trim() || "";
   } catch (error) {
     console.error("Vision detection error:", error);
@@ -506,9 +542,9 @@ export const detectSubject = async (base64Image: string, mimeType: string = 'ima
 };
 
 export const generateImageFromPrompt = async (prompt: string): Promise<string> => {
-  const ai = getAiClient();
   try {
-    const response = await retryOperation<any>(() => ai.models.generateImages({
+    // NOTE: Consumes Quota
+    const response = await callGemini(ai => ai.models.generateImages({
       model: 'imagen-4.0-generate-001',
       prompt: prompt,
       config: {
@@ -516,7 +552,7 @@ export const generateImageFromPrompt = async (prompt: string): Promise<string> =
         outputMimeType: 'image/jpeg',
         aspectRatio: '16:9',
       },
-    }));
+    }), true);
     const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
     if (base64ImageBytes) {
       return `data:image/jpeg;base64,${base64ImageBytes}`;
@@ -530,18 +566,18 @@ export const generateImageFromPrompt = async (prompt: string): Promise<string> =
 };
 
 export const analyzeImage = async (base64Image: string, prompt: string, mimeType: string = 'image/jpeg'): Promise<string> => {
-  const ai = getAiClient();
   const userPrompt = prompt || "Roast this image. Find the funniest flaw.";
   try {
-    const response = await retryOperation<GenerateContentResponse>(() => ai.models.generateContent({
+    // NOTE: Analysis is free (no quota)
+    const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
         parts: [
-            { inlineData: { data: base64Image, mimeType: mimeType } },
-            { text: userPrompt },
+          { inlineData: { data: base64Image, mimeType: mimeType } },
+          { text: userPrompt },
         ]
       },
-    }));
+    }), false);
     return response.text?.trim() || "No analysis generated.";
   } catch (error) {
     console.error("analyzeImage error:", error);
@@ -551,7 +587,6 @@ export const analyzeImage = async (base64Image: string, prompt: string, mimeType
 
 /**
  * Converts a base64 PNG to a WhatsApp-compliant WebP Blob.
- * Rules: 512x512, WebP, < 100KB, No Metadata.
  */
 export const convertToWhatsAppFormat = async (base64Image: string): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -566,38 +601,33 @@ export const convertToWhatsAppFormat = async (base64Image: string): Promise<Blob
         reject(new Error("Canvas context failed"));
         return;
       }
-      
-      // Clear canvas
+
       ctx.clearRect(0, 0, 512, 512);
-      
-      // Aspect Fit with padding
-      const SAFE_SIZE = 512; 
+
+      const SAFE_SIZE = 512;
       const scale = Math.min(SAFE_SIZE / img.width, SAFE_SIZE / img.height);
       const w = img.width * scale;
       const h = img.height * scale;
       const x = (512 - w) / 2;
       const y = (512 - h) / 2;
-      
+
       ctx.drawImage(img, x, y, w, h);
-      
-      // Recursive function to ensure size < 100KB by adjusting quality
+
       const attemptConversion = (quality: number) => {
-          canvas.toBlob((blob) => {
-            if (!blob) {
-                reject(new Error("WebP encoding failed"));
-                return;
-            }
-            
-            // WhatsApp strict limit is 100KB
-            if (blob.size > 99 * 1024 && quality > 0.1) {
-                attemptConversion(quality - 0.1);
-            } else {
-                resolve(blob);
-            }
-          }, 'image/webp', quality);
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error("WebP encoding failed"));
+            return;
+          }
+          if (blob.size > 99 * 1024 && quality > 0.1) {
+            attemptConversion(quality - 0.1);
+          } else {
+            resolve(blob);
+          }
+        }, 'image/webp', quality);
       };
 
-      attemptConversion(0.9); // Start high
+      attemptConversion(0.9);
     };
     img.onerror = (e) => reject(e);
     img.src = base64Image;
