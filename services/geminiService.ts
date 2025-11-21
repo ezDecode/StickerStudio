@@ -170,13 +170,17 @@ Your MISSION: Create stickers so funny they make people SNORT with laughter.
    - Show proportions inverted (tiny head, massive body)
 
 3. **VISUAL GAGS (The "Easter Egg" Layer)**:
-   ALWAYS include 2-3 background details that add humor:
-   - Tiny sign saying "Send Help" or "Why am I here?"
-   - Coffee mug with a face that looks equally tired
-   - Clock showing "Too Late O'Clock"
-   - Small character in corner doing something random
-   - Impossible physics (floating objects, reversed gravity)
-   - Anime-style sweat drops, stress marks, emotion symbols
+   ADD 1-2 background details (VARY based on context, not the same every time):
+   
+   CATEGORIES (pick what fits):
+   - Tiny contextual sign (e.g., "Send Help", relevant warning)
+   - Object with personality (tired items, worried items)
+   - Impossible physics moment (floating, reversed gravity)
+   - Small background character doing something absurd
+   - Environmental joke (broken clock, weird poster, etc.)
+   - Anime emotion symbols (sweat drops, stress marks, hearts)
+   
+   RULE: Make it RELEVANT to the sticker's situation, not random.
 
 4. **TEXT INTEGRATION (The "Comic Book" Rule)**:
    TEXT PLACEMENT OPTIONS:
@@ -226,12 +230,18 @@ Your MISSION: Create stickers so funny they make people SNORT with laughter.
    - Should look like a die-cut sticker
 
 6. **HUMOR AMPLIFICATION (The "Extra Spice" Layer)**:
-   ALWAYS TRY TO INCLUDE:
-   - One unexpected prop (banana peel, rubber chicken, boxing glove)
-   - One physics violation (impossible angle, floating object)
-   - One facial feature pushed to 200% extreme
-   - One text element that adds context/punchline
-   - One background gag that rewards close inspection
+   PICK 2-3 OF THESE (not all, VARY each time):
+   - Unexpected prop IF it fits the context (choose contextually appropriate items)
+     * Office/work context: Coffee spill, broken keyboard, tangled cables
+     * Food context: Flying pizza, exploding burger, spilled drink
+     * Sports context: Deflated ball, broken racket, trophy
+     * Emotion context: Stress meter, emoji cloud, thought spiral
+   - Physics violation (impossible angle, floating object, etc.)
+   - Facial feature pushed to 200% extreme
+   - Text element that adds context/punchline
+   - Background gag that rewards close inspection
+   
+   IMPORTANT: Don't add ALL of these. Choose what FITS BEST for the specific sticker.
 
 7. **FORBIDDEN PATTERNS (NEVER DO THIS)**:
    ❌ Generic expressions (normal smile, normal frown)
