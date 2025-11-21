@@ -20,37 +20,67 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
 
   const handleSubmit = async () => {
     if (rating === 0) return;
-    
+
     setIsSubmitting(true);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log({ rating, category, comment }); // Placeholder for actual analytics
-    
-    setIsSubmitting(false);
-    setIsSuccess(true);
-    
-    // Close after success
-    setTimeout(() => {
-      setIsSuccess(false);
-      setRating(0);
-      setComment('');
-      onClose();
-    }, 2000);
+
+    try {
+      const sheetUrl = import.meta.env.VITE_FEEDBACK_SHEET_URL;
+
+      if (sheetUrl) {
+        // Send to Google Sheets
+        await fetch(sheetUrl, {
+          method: 'POST',
+          mode: 'no-cors', // Required for Google Apps Script
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            rating,
+            category,
+            comment: comment || '(No comment)',
+          }),
+        });
+      } else {
+        // Fallback - just log if no sheet URL configured
+        console.log('📊 Feedback (no sheet configured):', { rating, category, comment });
+      }
+
+      setIsSubmitting(false);
+      setIsSuccess(true);
+
+      // Close after success
+      setTimeout(() => {
+        setIsSuccess(false);
+        setRating(0);
+        setComment('');
+        onClose();
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      // Still show success to user (graceful degradation)
+      setIsSubmitting(false);
+      setIsSuccess(true);
+
+      setTimeout(() => {
+        setIsSuccess(false);
+        setRating(0);
+        setComment('');
+        onClose();
+      }, 2000);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div className="relative w-full max-w-md bg-[#0c0c0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5">
           <div className="flex items-center gap-3">
@@ -62,7 +92,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
               <p className="text-xs text-zinc-500">Help us improve SkieVision</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="text-zinc-500 hover:text-white transition-colors"
           >
@@ -95,9 +125,9 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
                       onClick={() => setRating(star)}
                       className="focus:outline-none transition-transform hover:scale-110"
                     >
-                      <Star 
-                        size={28} 
-                        fill={(hoverRating || rating) >= star ? "#fbbf24" : "transparent"} 
+                      <Star
+                        size={28}
+                        fill={(hoverRating || rating) >= star ? "#fbbf24" : "transparent"}
                         className={(hoverRating || rating) >= star ? "text-amber-400" : "text-zinc-700"}
                         strokeWidth={1.5}
                       />
@@ -114,11 +144,10 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
                     <button
                       key={cat}
                       onClick={() => setCategory(cat.toLowerCase())}
-                      className={`px-3 py-2 text-xs rounded-lg border transition-all ${
-                        category === cat.toLowerCase() 
-                          ? 'bg-zinc-100 text-black border-transparent font-medium' 
-                          : 'bg-transparent text-zinc-400 border-zinc-800 hover:border-zinc-600'
-                      }`}
+                      className={`px-3 py-2 text-xs rounded-lg border transition-all ${category === cat.toLowerCase()
+                        ? 'bg-zinc-100 text-black border-transparent font-medium'
+                        : 'bg-transparent text-zinc-400 border-zinc-800 hover:border-zinc-600'
+                        }`}
                     >
                       {cat}
                     </button>
@@ -137,20 +166,20 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
                 />
               </div>
 
-              <Button 
-                className="w-full py-3" 
+              <Button
+                className="w-full py-3"
                 onClick={handleSubmit}
                 disabled={rating === 0 || isSubmitting}
               >
-                 {isSubmitting ? (
-                   <span className="flex items-center gap-2">
-                     <Loader2 className="animate-spin" size={16} /> Sending...
-                   </span>
-                 ) : (
-                   <span className="flex items-center gap-2">
-                     Send Feedback <Send size={14} />
-                   </span>
-                 )}
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin" size={16} /> Sending...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    Send Feedback <Send size={14} />
+                  </span>
+                )}
               </Button>
             </>
           )}

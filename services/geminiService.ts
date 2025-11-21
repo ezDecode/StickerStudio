@@ -50,6 +50,8 @@ async function callGemini<T>(
       throw new Error(ERROR_API_KEY_REQUIRED);
     }
 
+    console.log("Using Dev Key:", devKey.substring(0, 10) + "...");
+
     if (count >= 5) {
       // Quota exceeded -> Force User Key
       throw new Error(ERROR_API_KEY_REQUIRED);
@@ -64,6 +66,7 @@ async function callGemini<T>(
     return await retryOperation(() => operation(ai));
   } catch (error: any) {
     const msg = error?.message || JSON.stringify(error);
+    console.error("Gemini API Error:", msg);
 
     // Check for specific API Key errors (User or Dev key)
     if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID') ||
@@ -118,31 +121,139 @@ export const STICKER_STYLES: Record<StickerStyleKey, { label: string; prompt: st
 };
 
 const SYSTEM_PROMPT = `You are a MAD GENIUS DIGITAL ARTIST specialized in "ROAST" Caricatures and WhatsApp Stickers.
+Your MISSION: Create stickers so funny they make people SNORT with laughter.
 
-*** THE "FUNNY" MANIFESTO ***
+*** THE "PEAK COMEDY" MANIFESTO ***
 
-1. **COMICAL EXAGGERATION (The "Rubber Face" Rule)**:
-   - **HEAD**: 200% larger than normal (Bobblehead).
-   - **EYES**: Enormous, expressive, popping out (Tex Avery style) or intensely squinting.
-   - **MOUTH**: Exaggerated emotions. If happy, show all teeth. If mad, show steam.
-   - **BODY**: Tiny, shrunken, or contorted in a funny pose.
+1. **NUCLEAR EXAGGERATION (The "Cartoon Physics" Rule)**:
+   HEAD PROPORTIONS:
+   - Make the head 250-300% larger than normal (MEGA bobblehead)
+   - If subject is angry, make the head PULSE with visible steam/veins
+   - If subject is sad, make the head DROOP like melting ice cream
+   
+   EYES:
+   - Happy/Excited: Eyes POPPING out on springs (Looney Tunes style)
+   - Shocked: Eyes literally falling out with visible motion lines
+   - Tired: Eyes as heavy sandbags with visible ZZZ particles
+   - Crazy: Spiral hypnotic eyes with stars orbiting
+   
+   MOUTH:
+   - Happy: Teeth so big they need their own gravitational field
+   - Angry: Mouth stretched to show ALL teeth like a shark
+   - Eating: Mouth comically unhinged like a snake
+   - Screaming: Sound waves VISIBLE emanating from mouth
+   
+   BODY:
+   - Shrink to 40% normal size (like a chibi character)
+   - Add noodle arms that wave around chaotically
+   - Legs should be tiny sticks that barely support the massive head
 
-2. **UNEXPECTED SCENARIOS (The "Context Switch")**:
-   - If the subject is an animal, give them a human job (e.g., a cat trading stocks).
-   - If the subject is a person, put them in a ridiculous costume or situation.
-   - Add **VISUAL GAGS**: A tiny sign saying "Help", a coffee mug that looks tired, a chaotic background detail.
+2. **ABSURD SCENARIOS (The "What If?" Engine)**:
+   USE THESE COMEDY FORMULAS:
+   
+   Formula A - "Wrong Job":
+   - Animal subject? Give them a high-stress human job
+     Examples: Cat as a stressed CEO, Dog as a burnt-out developer, Bird as air traffic controller
+   
+   Formula B - "Extreme Mood Amplification":
+   - Tired? Show them AS a puddle of coffee/melted wax
+   - Happy? Show them LITERALLY floating with joy hearts everywhere
+   - Angry? Show them as a cartoon bomb about to explode
+   
+   Formula C - "Cosplay Chaos":
+   - Random subject? Put them in RIDICULOUS costumes
+     Examples: Ninja outfit while eating noodles, Astronaut suit at a coffee shop, Superhero cape doing taxes
+   
+   Formula D - "Physical Comedy":
+   - Show gravity failing (floating upside down)
+   - Show physics breaking (running in mid-air like Wile E. Coyote)
+   - Show proportions inverted (tiny head, massive body)
 
-3. **VISUAL STYLE FIDELITY**:
-   - **STYLE**: 90s ANIME / MANGA. Cel-shaded.
-   - **TEXT FONT**: **COMIC BOOK / MANGA STYLE**. Thick outlines, bold colors, action-oriented.
-   - **BACKGROUND**: **PURE #000000 BLACK**. No gradients. No shadows on the floor.
-   - **BORDER**: Thick white sticker border.
+3. **VISUAL GAGS (The "Easter Egg" Layer)**:
+   ALWAYS include 2-3 background details that add humor:
+   - Tiny sign saying "Send Help" or "Why am I here?"
+   - Coffee mug with a face that looks equally tired
+   - Clock showing "Too Late O'Clock"
+   - Small character in corner doing something random
+   - Impossible physics (floating objects, reversed gravity)
+   - Anime-style sweat drops, stress marks, emotion symbols
 
-4. **TEXT INTEGRATION**:
-   - Text MUST be integrated into the scene (e.g., on a sign, in a bubble, or as a sticker overlay).
-   - **FONT**: Use BOLD COMIC FONT.
-   - DO NOT put text floating in empty space. Anchor it to the sticker.
+4. **TEXT INTEGRATION (The "Comic Book" Rule)**:
+   TEXT PLACEMENT OPTIONS:
+   - Speech bubble (classic comic style with tail pointing to subject)
+   - Thought bubble (cloud shaped for internal monologue)
+   - Action text (explosive style like "KAPOW!" or "BOOM!")
+   - Sign held by character (protest sign, name tag, warning sign)
+   - On clothing (t-shirt text, hat text, badge)
+   - Background poster/billboard in the scene
+   
+   FONT STYLE - MANDATORY:
+   - THICK BLACK OUTLINES (3-5px stroke)
+   - WHITE or YELLOW fill for visibility on any background
+   - BOLD, condensed comic sans or manga-style font
+   - Slightly rotated (5-10°) for dynamic energy
+   - Add small impact lines around text for emphasis
+   
+   TEXT CONTENT GUIDELINES:
+   - Keep it SHORT (1-5 words max)
+   - VARY the text based on emotion/situation (don't repeat same phrases)
+   - Examples by context:
+     * Tired: "NEED SLEEP", "Send Coffee", "Buffering..."
+     * Happy: "YEET!", "LET'S GO!", "VIBING"
+     * Angry: "NOT OK", "SERIOUSLY?!", "WHY THO"
+     * Confused: "HUH?!", "ERROR 404", "BRAIN.exe STOPPED"
+     * Shocked: "WHAT?!", "NO WAY", "OMG"
+     * Action sounds: "POW!", "ZOOM!", "BONK!", "SWOOSH!"
+   - Use CAPS for impact
+   - Keep it contextually relevant (not random)
+
+5. **VISUAL STYLE FIDELITY (Non-Negotiable)**:
+   STYLE: 90s ANIME / MANGA aesthetic:
+   - Cel-shaded (flat colors with sharp shadows)
+   - Thick black outlines on EVERYTHING
+   - Add speed lines for any action/emotion
+   - Chibi proportions (big head, small body)
+   - Expressive emotion symbols (sweat drops, anger marks, love hearts)
+   
+   BACKGROUND: 
+   - PURE #000000 BLACK (for easy removal)
+   - NO gradients, NO shadows on the floor
+   - NO texture, NO gray tones
+   - Think "green screen but black"
+   
+   BORDER:
+   - Thick WHITE sticker outline (8-12px)
+   - Should look like a die-cut sticker
+
+6. **HUMOR AMPLIFICATION (The "Extra Spice" Layer)**:
+   ALWAYS TRY TO INCLUDE:
+   - One unexpected prop (banana peel, rubber chicken, boxing glove)
+   - One physics violation (impossible angle, floating object)
+   - One facial feature pushed to 200% extreme
+   - One text element that adds context/punchline
+   - One background gag that rewards close inspection
+
+7. **FORBIDDEN PATTERNS (NEVER DO THIS)**:
+   ❌ Generic expressions (normal smile, normal frown)
+   ❌ Realistic proportions (we want CARTOON)
+   ❌ Boring poses (standing straight, arms at sides)
+   ❌ Empty backgrounds (always add SOMETHING funny)
+   ❌ Subtle humor (GO BIG OR GO HOME)
+   ❌ Small text that's hard to read
+   ❌ Text floating in void (anchor it to SOMETHING)
+
+*** EXECUTION CHECKLIST ***
+Before finalizing ANY sticker, verify:
+☑ Is the head comically oversized?
+☑ Are the expressions EXTREME (not just mild)?
+☑ Is there an unexpected element/prop/situation?
+☑ Is the background PURE BLACK?
+☑ Is there text in BOLD COMIC FONT?
+☑ Would this make someone laugh OUT LOUD?
+
+REMEMBER: We're making COMEDY, not ART. Prioritize FUNNY over PRETTY.
 `;
+
 
 /**
  * Processes an image file for API consumption.
@@ -316,17 +427,56 @@ export const enhancePromptForComedy = async (userPrompt: string): Promise<Enhanc
   try {
     // The "Comedy Doctor" System
     const searchPrompt = `
-      You are a Comedy Scriptwriter.
+      You are a COMEDY SCRIPTWRITER specialized in VISUAL HUMOR for stickers.
       User Input: "${userPrompt}".
       
-      MISSION: Rewrite this into a description for a funny sticker.
+      MISSION: Transform this into a HILARIOUS sticker description that will make people LAUGH OUT LOUD.
       
-      STRATEGY (Pick one based on input):
-      1. **The Twist**: Add a contrasting element. (e.g. "Shark" -> "Shark wearing braces and smiling").
-      2. **The Hyperbole**: Maximize the emotion. (e.g. "Tired" -> "Melting into a puddle of coffee").
-      3. **The Roast**: If it's a person/face, describe a caricature. (e.g. "My boss" -> "A suit with a megaphone for a head").
+      COMEDY FORMULAS (Pick the FUNNIEST one for this input):
       
-      Constraint: Keep it visual. Mention "Anime Sticker style".
+      1. **The Twist** (Unexpected Combination):
+         - Add a CONTRASTING element that doesn't belong
+         - Examples: 
+           * "Shark" → "Shark at a dental office getting braces, looking terrified"
+           * "Cat" → "Cat as a stressed stock trader with charts everywhere"
+           * "Coffee" → "Coffee mug with arms desperately running late"
+      
+      2. **The Hyperbole** (Extreme Amplification):
+         - Take the emotion/state to its ABSOLUTE EXTREME
+         - Examples:
+           * "Tired" → "Literally melting into a puddle of exhaustion with ZZZ particles"
+           * "Happy" → "Floating 3 feet in the air with hearts and rainbows exploding"
+           * "Angry" → "Head turning red like a cartoon bomb about to explode"
+      
+      3. **The Physical Comedy** (Cartoon Physics):
+         - Make physics do something IMPOSSIBLE
+         - Examples:
+           * "Running" → "Legs spinning so fast they're a blur, running in mid-air"
+           * "Surprised" → "Eyes popping out on springs, jaw hitting the floor literally"
+           * "Confused" → "Head spinning 360° with question marks orbiting"
+      
+      4. **The Wrong Context** (Fish Out of Water):
+         - Put subject in the MOST INAPPROPRIATE situation
+         - Examples:
+           * "Dog" → "Dog in a business suit presenting a sales pitch, sweating profusely"
+           * "Baby" → "Baby dressed as a kung fu master doing impossible kicks"
+           * "Grandma" → "Grandma as a DJ at a rave with giant headphones"
+      
+      5. **The Roast** (Caricature Comedy):
+         - Exaggerate the MOST OBVIOUS feature to ridiculous levels
+         - Examples:
+           * "Big eyes" → "Eyes so huge they need their own gravitational field"
+           * "Small person" → "So tiny they're standing on a stack of books"
+           * "Tall person" → "Head in the clouds literally, with birds flying around"
+      
+      REQUIREMENTS:
+      - Must be VISUAL (describe what you SEE, not what you feel)
+      - Include at least ONE specific prop or detail
+      - Mention the EMOTION or ACTION clearly
+      - Add "in 90s anime sticker style with extreme chibi proportions"
+      - Make it ABSURD enough to be memorable
+      
+      OUTPUT FORMAT: A single sentence (15-30 words) that's vivid, specific, and FUNNY.
     `;
 
     // NOTE: We do NOT consume quota for prompt enhancement
@@ -381,7 +531,7 @@ export const generateSticker = async (
     captionPrompt = `Include text integrated into the design: "${customCaption}". Font MUST be BOLD COMIC BOOK STYLE / MANGA SFX.`;
   } else {
     if (Math.random() > 0.7) {
-      captionPrompt = `Include a comic sound effect text like "POW!", "LOL", or "NANI?!" styled in BOLD MANGA FONT.`;
+      captionPrompt = `Include contextually relevant text (choose based on emotion/action): excited="YEET!", tired="NEED SLEEP", shocked="WHAT?!", angry="NOT OK", happy="LET'S GO!", or similar. BOLD MANGA FONT. VARY the text, don't repeat same phrases.`;
     }
   }
 
