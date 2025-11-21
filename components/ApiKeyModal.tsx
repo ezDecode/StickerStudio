@@ -7,7 +7,7 @@ import Button from './Button';
 interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  reason: 'quota' | 'invalid' | 'missing';
+  reason: 'invalid' | 'missing';
 }
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, reason }) => {
@@ -58,13 +58,11 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, reason }) =>
   };
 
   const getTitle = () => {
-    if (reason === 'quota') return "Free Limit Reached";
     if (reason === 'invalid') return "Invalid API Key";
-    return "Setup Gemini API";
+    return "Setup Required";
   };
 
   const getDescription = () => {
-    if (reason === 'quota') return "You've used your 5 free generations! Enter your own Gemini API key to continue making unlimited stickers.";
     if (reason === 'invalid') return "The provided API Key didn't work. Please enter a valid key to continue.";
     return "To start creating stickers, please provide your Gemini API Key.";
   };
@@ -118,23 +116,15 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, reason }) =>
                 ) : "Validate & Save Key"}
               </Button>
 
-              <div className="flex justify-center mt-2">
-                <button
-                  onClick={handleRemoveKey}
-                  className="text-xs text-red-400 hover:text-red-300 underline decoration-red-900/50"
-                >
-                  Remove my key (Use Free Quota)
-                </button>
-              </div>
 
-              <div className="text-center">
+              <div className="text-center mt-4">
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-zinc-500 hover:text-zinc-300 underline decoration-zinc-700"
                 >
-                  Get a free Gemini API Key here
+                  Get your free Gemini API Key →
                 </a>
               </div>
             </div>

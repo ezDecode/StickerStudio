@@ -1,6 +1,6 @@
 import { Sticker } from '../types';
 
-const DB_NAME = 'QuirkDB';
+const DB_NAME = 'SkieVisionDB';
 const DB_VERSION = 2; // Incremented for new store
 const STORE_GALLERY = 'gallery';
 const STORE_AUTOSAVE = 'autosave';

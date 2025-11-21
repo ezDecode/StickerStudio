@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality, GenerateContentResponse } from "@google/genai";
-import { getUserApiKey, getFreeImageCount, incrementFreeImageCount, clearUserApiKey, saveUserApiKey } from './storage';
+import { getUserApiKey, clearUserApiKey, saveUserApiKey } from './storage';
 
 // Error constant for UI to detect
 export const ERROR_API_KEY_REQUIRED = "API_KEY_REQUIRED";
@@ -23,69 +23,37 @@ export const validateUserKey = async (apiKey: string): Promise<boolean> => {
   }
 };
 
+
 /**
  * CORE API EXECUTOR
- * Handles: Key Selection (User vs Dev), Quota Checking, Error Handling
+ * Requires user to provide their own API key
  */
 async function callGemini<T>(
-  operation: (ai: GoogleGenAI) => Promise<T>,
-  consumeQuota: boolean = false
+  operation: (ai: GoogleGenAI) => Promise<T>
 ): Promise<T> {
-  // 1. Check for User Key first
+  // Always require user API key - no free quota
   const userKey = await getUserApiKey();
-  let ai: GoogleGenAI;
-  let usingDevKey = false;
 
-  if (userKey) {
-    ai = new GoogleGenAI({ apiKey: userKey });
-  } else {
-    // 2. Fallback to Developer Key if Quota allows
-    const count = await getFreeImageCount();
-    // Support both variable names for safety, prioritizing the one from .env
-    const devKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY;
-
-    if (!devKey) {
-      console.error("Dev Key missing in environment");
-      // Config error or intentional missing key -> Force User Key
-      throw new Error(ERROR_API_KEY_REQUIRED);
-    }
-
-    console.log("Using Dev Key:", devKey.substring(0, 10) + "...");
-
-    if (count >= 5) {
-      // Quota exceeded -> Force User Key
-      throw new Error(ERROR_API_KEY_REQUIRED);
-    }
-
-    ai = new GoogleGenAI({ apiKey: devKey });
-    usingDevKey = true;
+  if (!userKey) {
+    throw new Error(ERROR_API_KEY_REQUIRED);
   }
 
-  // 3. Execute Operation
+  const ai = new GoogleGenAI({ apiKey: userKey });
+
+  // Execute Operation
   try {
     return await retryOperation(() => operation(ai));
   } catch (error: any) {
     const msg = error?.message || JSON.stringify(error);
     console.error("Gemini API Error:", msg);
 
-    // Check for specific API Key errors (User or Dev key)
+    // Check for API key errors
     if (msg.includes('API key not valid') || msg.includes('API_KEY_INVALID') ||
-      (userKey && (msg.includes('403') || msg.includes('API key') || msg.includes('PERMISSION_DENIED')))) {
-
-      if (userKey) {
-        await clearUserApiKey();
-        throw new Error(ERROR_API_KEY_INVALID);
-      }
-
-      // If Dev Key failed, we now REQUIRE a user key
-      throw new Error(ERROR_API_KEY_REQUIRED);
+      msg.includes('403') || msg.includes('API key') || msg.includes('PERMISSION_DENIED')) {
+      await clearUserApiKey();
+      throw new Error(ERROR_API_KEY_INVALID);
     }
     throw error;
-  } finally {
-    // 4. Increment Quota only if using Dev Key AND operation was "consumable" (successful image gen)
-    if (usingDevKey && consumeQuota) {
-      await incrementFreeImageCount();
-    }
   }
 }
 
@@ -489,7 +457,6 @@ export const enhancePromptForComedy = async (userPrompt: string): Promise<Enhanc
       OUTPUT FORMAT: A single sentence (15-30 words) that's vivid, specific, and FUNNY.
     `;
 
-    // NOTE: We do NOT consume quota for prompt enhancement
     const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: searchPrompt,
@@ -497,7 +464,7 @@ export const enhancePromptForComedy = async (userPrompt: string): Promise<Enhanc
         tools: [{ googleSearch: {} }],
         temperature: 1.5,
       },
-    }), false);
+    }));
 
     const text = response.text?.trim() || userPrompt;
 
@@ -559,7 +526,6 @@ export const generateSticker = async (
     `;
 
     try {
-      // NOTE: Consumes Quota
       const response = await callGemini(ai => ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: prompt,
@@ -568,7 +534,7 @@ export const generateSticker = async (
           outputMimeType: 'image/jpeg',
           aspectRatio: '1:1',
         },
-      }), true);
+      }));
 
       const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
       if (base64ImageBytes) {
@@ -599,7 +565,6 @@ export const generateSticker = async (
     if (userPrompt) prompt += ` Context/Idea: ${userPrompt}.`;
 
     try {
-      // NOTE: Consumes Quota
       const response = await callGemini(ai => ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: {
@@ -613,7 +578,7 @@ export const generateSticker = async (
           temperature: 1.2,
           responseModalities: [Modality.IMAGE],
         },
-      }), true);
+      }));
 
       const part = response.candidates?.[0]?.content?.parts?.[0];
       if (part && part.inlineData) {
@@ -655,7 +620,6 @@ export const editSticker = async (
   `;
 
   try {
-    // NOTE: Consumes Quota
     const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
@@ -668,7 +632,7 @@ export const editSticker = async (
         systemInstruction: SYSTEM_PROMPT,
         responseModalities: [Modality.IMAGE],
       },
-    }), true);
+    }));
 
     const part = response.candidates?.[0]?.content?.parts?.[0];
     if (part && part.inlineData) {
@@ -684,7 +648,6 @@ export const editSticker = async (
 
 export const detectSubject = async (base64Image: string, mimeType: string = 'image/jpeg'): Promise<string> => {
   try {
-    // NOTE: Detection is free (no quota consumed)
     const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
@@ -693,7 +656,7 @@ export const detectSubject = async (base64Image: string, mimeType: string = 'ima
           { text: "Identify the main subject and suggest a ROAST caption. Make it mean but funny." },
         ],
       },
-    }), false);
+    }));
     return response.text?.trim() || "";
   } catch (error) {
     console.error("Vision detection error:", error);
@@ -703,7 +666,6 @@ export const detectSubject = async (base64Image: string, mimeType: string = 'ima
 
 export const generateImageFromPrompt = async (prompt: string): Promise<string> => {
   try {
-    // NOTE: Consumes Quota
     const response = await callGemini(ai => ai.models.generateImages({
       model: 'imagen-4.0-generate-001',
       prompt: prompt,
@@ -712,7 +674,7 @@ export const generateImageFromPrompt = async (prompt: string): Promise<string> =
         outputMimeType: 'image/jpeg',
         aspectRatio: '16:9',
       },
-    }), true);
+    }));
     const base64ImageBytes = response.generatedImages?.[0]?.image?.imageBytes;
     if (base64ImageBytes) {
       return `data:image/jpeg;base64,${base64ImageBytes}`;
@@ -728,7 +690,6 @@ export const generateImageFromPrompt = async (prompt: string): Promise<string> =
 export const analyzeImage = async (base64Image: string, prompt: string, mimeType: string = 'image/jpeg'): Promise<string> => {
   const userPrompt = prompt || "Roast this image. Find the funniest flaw.";
   try {
-    // NOTE: Analysis is free (no quota)
     const response = await callGemini(ai => ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: {
@@ -737,7 +698,7 @@ export const analyzeImage = async (base64Image: string, prompt: string, mimeType
           { text: userPrompt },
         ]
       },
-    }), false);
+    }));
     return response.text?.trim() || "No analysis generated.";
   } catch (error) {
     console.error("analyzeImage error:", error);
