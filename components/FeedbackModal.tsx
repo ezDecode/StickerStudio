@@ -38,6 +38,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
             rating,
             category,
             comment: comment || '(No comment)',
+                      origin: window.location.origin, // Add origin for security validation
           }),
         });
       } else {
