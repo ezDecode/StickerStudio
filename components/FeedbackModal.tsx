@@ -30,7 +30,6 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
         // Send to Google Sheets
         await fetch(sheetUrl, {
           method: 'POST',
-          mode: 'no-cors', // Required for Google Apps Script
           headers: {
             'Content-Type': 'application/json',
           },
